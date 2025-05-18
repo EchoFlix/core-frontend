@@ -9,10 +9,9 @@ interface TorrentStatus {
 }
 
 function App() {
-  const [file, setFile] = useState<File | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [status, setStatus] = useState<TorrentStatus | null>(null);
-  const [isBuffering, setIsBuffering] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const statusInterval = useRef<number>();
 
@@ -20,7 +19,6 @@ function App() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setFile(file);
     const formData = new FormData();
     formData.append('file', file);
 
@@ -28,22 +26,35 @@ function App() {
       const response = await fetch('http://localhost:8000/upload', {
         method: 'POST',
         body: formData,
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json',
-        },
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       const data = await response.json();
       setSessionId(data.session_id);
+      setVideoReady(false);
       startStatusPolling(data.session_id);
-    } catch (error) {
-      console.error('Upload failed:', error);
-      alert('Failed to upload file. Please make sure the backend server is running at http://localhost:8000');
+    } catch {
+      console.error('Upload failed');
+    }
+  };
+
+  // Handler for .torrent file upload
+  const handleTorrentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('http://localhost:8000/seed', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      setSessionId(data.session_id);
+      setVideoReady(false);
+      startStatusPolling(data.session_id);
+    } catch {
+      alert('Failed to seed torrent. Is the backend running?');
     }
   };
 
@@ -51,38 +62,19 @@ function App() {
     if (statusInterval.current) {
       clearInterval(statusInterval.current);
     }
-
     statusInterval.current = window.setInterval(async () => {
       try {
-        const response = await fetch(`http://localhost:8000/status/${sid}`, {
-          credentials: 'include',
-          headers: {
-            'Accept': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
+        const response = await fetch(`http://localhost:8000/status/${sid}`);
         const data = await response.json();
         setStatus(data);
-        
-        if (data.progress >= 10 && isBuffering) {
-          setIsBuffering(false);
-          if (videoRef.current) {
-            videoRef.current.src = `http://localhost:8000/stream/${sid}`;
-          }
+        if (data.progress > 0 && !videoReady && videoRef.current) {
+          videoRef.current.src = `http://localhost:8000/stream/${sid}`;
+          setVideoReady(true);
         }
-      } catch (error) {
-        console.error('Status check failed:', error);
+      } catch {
+        // ignore
       }
     }, 1000);
-  };
-
-  const downloadTorrent = async () => {
-    if (!sessionId) return;
-    window.location.href = `http://localhost:8000/download/${sessionId}`;
   };
 
   useEffect(() => {
@@ -92,6 +84,11 @@ function App() {
       }
     };
   }, []);
+
+  const downloadTorrent = async () => {
+    if (!sessionId) return;
+    window.location.href = `http://localhost:8000/download/${sessionId}`;
+  };
 
   return (
     <div className="container">
@@ -104,6 +101,16 @@ function App() {
           onChange={handleFileUpload}
           className="file-input"
         />
+        <br /><br />
+        <input
+          type="file"
+          accept=".torrent"
+          onChange={handleTorrentUpload}
+          className="file-input"
+        />
+        <div style={{ fontSize: '0.9em', color: '#888' }}>
+          (Upload a .torrent file to stream a video from the network)
+        </div>
       </div>
 
       {status && (
@@ -121,13 +128,7 @@ function App() {
           ref={videoRef}
           controls
           className="video-player"
-          style={{ display: isBuffering ? 'none' : 'block' }}
         />
-        {isBuffering && (
-          <div className="buffering">
-            <p>Buffering... {status?.progress.toFixed(2)}%</p>
-          </div>
-        )}
       </div>
 
       {sessionId && (
