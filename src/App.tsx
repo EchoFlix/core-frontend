@@ -11,9 +11,9 @@ interface TorrentStatus {
 function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [status, setStatus] = useState<TorrentStatus | null>(null);
-  const [videoReady, setVideoReady] = useState(false);
+  const videoReady = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const statusInterval = useRef<number>();
+  const statusInterval = useRef<number | null>(null);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -29,7 +29,7 @@ function App() {
       });
       const data = await response.json();
       setSessionId(data.session_id);
-      setVideoReady(false);
+      videoReady.current = false;
       startStatusPolling(data.session_id);
     } catch {
       console.error('Upload failed');
@@ -51,7 +51,7 @@ function App() {
       });
       const data = await response.json();
       setSessionId(data.session_id);
-      setVideoReady(false);
+      videoReady.current = false;
       startStatusPolling(data.session_id);
     } catch {
       alert('Failed to seed torrent. Is the backend running?');
@@ -61,15 +61,16 @@ function App() {
   const startStatusPolling = (sid: string) => {
     if (statusInterval.current) {
       clearInterval(statusInterval.current);
+      statusInterval.current = null;
     }
     statusInterval.current = window.setInterval(async () => {
       try {
         const response = await fetch(`http://localhost:8000/status/${sid}`);
         const data = await response.json();
         setStatus(data);
-        if (data.progress > 0 && !videoReady && videoRef.current) {
+        if (data.progress >= 100 && !videoReady.current && videoRef.current) {
           videoRef.current.src = `http://localhost:8000/stream/${sid}`;
-          setVideoReady(true);
+          videoReady.current = true;
         }
       } catch {
         // ignore
@@ -81,6 +82,7 @@ function App() {
     return () => {
       if (statusInterval.current) {
         clearInterval(statusInterval.current);
+        statusInterval.current = null;
       }
     };
   }, []);
