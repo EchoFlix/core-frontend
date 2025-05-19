@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { API_BASE } from './config'
 
 interface TorrentStatus {
   progress: number;
@@ -22,7 +23,7 @@ function App() {
     formData.append('file', file);
 
     try {
-      const response = await fetch('http://localhost:8000/upload', {
+      const response = await fetch(`${API_BASE}/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -44,7 +45,7 @@ function App() {
     formData.append('file', file);
 
     try {
-      const response = await fetch('http://localhost:8000/seed', {
+      const response = await fetch(`${API_BASE}/seed`, {
         method: 'POST',
         body: formData,
       });
@@ -64,11 +65,11 @@ function App() {
     }
     statusInterval.current = window.setInterval(async () => {
       try {
-        const response = await fetch(`http://localhost:8000/status/${sid}`);
+        const response = await fetch(`${API_BASE}/status/${sid}`);
         const data = await response.json();
         setStatus(data);
         if (data.progress >= 100 && !videoReady.current && videoRef.current) {
-          videoRef.current.src = `http://localhost:8000/stream/${sid}`;
+          videoRef.current.src = `${API_BASE}/stream/${sid}`;
           videoReady.current = true;
         }
       } catch {
@@ -88,7 +89,7 @@ function App() {
 
   const downloadTorrent = async () => {
     if (!sessionId) return;
-    window.location.href = `http://localhost:8000/download/${sessionId}`;
+    window.location.href = `${API_BASE}/download/${sessionId}`;
   };
 
   return (
