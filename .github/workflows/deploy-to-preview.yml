@@ -29,10 +29,6 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-
-      - name: Create .env file
-        run: |
-          echo "ENVIRONMENT=preview" >> .env
       
       - name: Install dependencies
         run: npm install
@@ -66,6 +62,13 @@ jobs:
 
       - name: Build React App
         run: npm run build
+
+      - name: Create .env file
+        run: |
+          echo "ENVIRONMENT="preview"" >> .env
+          
+      - name: Copy .env to dist
+        run: cp .env dist/
 
       - name: Deploy to S3
         run: |
